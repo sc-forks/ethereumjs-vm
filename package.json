@@ -1,5 +1,5 @@
 {
-  "name": "ethereumjs-vm-sc",
+  "name": "ethereumjs-vm",
   "version": "2.0.2",
   "description": "an ethereum VM implementation",
   "main": "index.js",
