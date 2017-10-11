@@ -8,7 +8,7 @@
     "async-eventemitter": "^0.2.2",
     "ethereum-common": "0.0.18",
     "ethereumjs-account": "^2.0.3",
-    "ethereumjs-block": "^1.2.2",
+    "ethereumjs-block": "1.2.2",
     "ethereumjs-util": "^4.0.1",
     "fake-merkle-patricia-tree": "^1.0.1",
     "functional-red-black-tree": "^1.0.1",
