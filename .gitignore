@@ -32,6 +32,8 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+### IDE ###
+.idea
 
 ### Node ###
 # Logs
@@ -49,6 +51,7 @@ lib-cov
 
 # Coverage directory used by tools like istanbul
 coverage
+.nyc_output
 
 # Grunt intermediate storage (http://gruntjs.com/creating-plugins#storing-task-files)
 .grunt
@@ -63,5 +66,8 @@ build/Release
 # https://docs.npmjs.com/misc/faq#should-i-check-my-node-modules-folder-into-git
 node_modules
 package-lock.json
+yarn.lock
 
+# Build folder
+dist
 

@@ -7,21 +7,62 @@ const Transaction = require('ethereumjs-tx')
 const Block = require('ethereumjs-block')
 
 exports.dumpState = function (state, cb) {
-  var rs = state.createReadStream()
-  var statedump = {}
+  function readAccounts (state) {
+    return new Promise((resolve, reject) => {
+      let accounts = []
+      var rs = state.createReadStream()
+      rs.on('data', function (data) {
+        let account = new Account(data.value)
+        account.address = data.key
+        accounts.push(account)
+      })
 
-  rs.on('data', function (data) {
-    var account = new Account(data.value)
-    statedump[data.key.toString('hex')] = {
-      balance: new BN(account.balance).toString(),
-      nonce: new BN(account.nonce).toString(),
-      stateRoot: account.stateRoot.toString('hex')
-    }
-  })
+      rs.on('end', function () {
+        resolve(accounts)
+      })
+    })
+  }
 
-  rs.on('end', function () {
-    console.log(statedump)
-    cb()
+  function readStorage (state, account) {
+    return new Promise((resolve, reject) => {
+      let storage = {}
+      let storageTrie = state.copy()
+      storageTrie.root = account.stateRoot
+      let storageRS = storageTrie.createReadStream()
+
+      storageRS.on('data', function (data) {
+        storage[data.key.toString('hex')] = data.value.toString('hex')
+      })
+
+      storageRS.on('end', function () {
+        resolve(storage)
+      })
+    })
+  }
+
+  readAccounts(state).then(function (accounts) {
+    async.mapSeries(accounts, function (account, cb) {
+      readStorage(state, account).then((storage) => {
+        account.storage = storage
+        cb(null, account)
+      })
+    },
+    function (err, results) {
+      if (err) {
+        cb(err, null)
+      }
+      for (let i = 0; i < results.length; i++) {
+        console.log('SHA3\'d address: ' + results[i].address.toString('hex'))
+        console.log('\tstate root: ' + results[i].stateRoot.toString('hex'))
+        console.log('\tstorage: ')
+        for (let storageKey in results[i].storage) {
+          console.log('\t\t' + storageKey + ': ' + results[i].storage[storageKey])
+        }
+        console.log('\tnonce: ' + (new BN(results[i].nonce)).toString())
+        console.log('\tbalance: ' + (new BN(results[i].balance)).toString())
+      }
+      return cb()
+    })
   })
 }
 
@@ -51,7 +92,7 @@ var format = exports.format = function (a, toZero, isHex) {
 /**
  * makeTx using JSON from tests repo
  * @param {[type]} txData the transaction object from tests repo
- * @return {Object}        object that will be passed to VM.runTx function
+ * @returns {Object}        object that will be passed to VM.runTx function
  */
 exports.makeTx = function (txData) {
   var tx = new Transaction()
@@ -77,7 +118,7 @@ exports.verifyPostConditions = function (state, testData, t, cb) {
   var keyMap = {}
 
   for (var key in testData) {
-    var hash = utils.sha3(Buffer.from(utils.stripHexPrefix(key), 'hex')).toString('hex')
+    var hash = utils.keccak256(Buffer.from(utils.stripHexPrefix(key), 'hex')).toString('hex')
     hashedAccounts[hash] = testData[key]
     keyMap[hash] = key
   }
@@ -141,7 +182,7 @@ exports.verifyAccountPostConditions = function (state, address, account, acctDat
 
   var hashedStorage = {}
   for (var key in acctData.storage) {
-    hashedStorage[utils.sha3(utils.setLength(Buffer.from(key.slice(2), 'hex'), 32)).toString('hex')] = acctData.storage[key]
+    hashedStorage[utils.keccak256(utils.setLength(Buffer.from(key.slice(2), 'hex'), 32)).toString('hex')] = acctData.storage[key]
   }
 
   if (storageKeys.length > 0) {
@@ -220,7 +261,7 @@ exports.verifyLogs = function (logs, testData, t) {
 /**
  * toDecimal - converts buffer to decimal string, no leading zeroes
  * @param  {Buffer}
- * @return {String}
+ * @returns {String}
  */
 exports.toDecimal = function (buffer) {
   return new BN(buffer).toString()
@@ -229,7 +270,7 @@ exports.toDecimal = function (buffer) {
 /**
  * fromDecimal - converts decimal string to buffer
  * @param {String}
- *  @return {Buffer}
+ *  @returns {Buffer}
  */
 exports.fromDecimal = function (string) {
   return Buffer.from(new BN(string).toArray())
@@ -238,19 +279,19 @@ exports.fromDecimal = function (string) {
 /**
  * fromAddress - converts hexString address to 256-bit buffer
  * @param  {String} hexString address for example '0x03'
- * @return {Buffer}
+ * @returns {Buffer}
  */
 exports.fromAddress = function (hexString) {
   return utils.setLength(Buffer.from(new BN(hexString.slice(2), 16).toArray()), 32)
 }
 
 /**
- * toCodeHash - applies sha3 to hexCode
+ * toCodeHash - applies keccak256 to hexCode
  * @param {String} hexCode string from tests repo
- * @return {Buffer}
+ * @returns {Buffer}
  */
 exports.toCodeHash = function (hexCode) {
-  return utils.sha3(Buffer.from(hexCode.slice(2), 'hex'))
+  return utils.keccak256(Buffer.from(hexCode.slice(2), 'hex'))
 }
 
 exports.makeBlockHeader = function (data) {
@@ -270,7 +311,7 @@ exports.makeBlockHeader = function (data) {
  * makeBlockFromEnv - helper to create a block from the env object in tests repo
  * @param {Object} env object from tests repo
  * @param {Object} transactions transactions for the block
- * @return {Object}  the block
+ * @returns {Object} the block
  */
 exports.makeBlockFromEnv = function (env, transactions) {
   return new Block({
@@ -286,7 +327,7 @@ exports.makeBlockFromEnv = function (env, transactions) {
  * @param {Object} exec    object from the tests repo
  * @param {Object} account that the executing code belongs to
  * @param {Object} block   that the transaction belongs to
- * @return {Object}        object that will be passed to VM.runCode function
+ * @returns {Object}       object that will be passed to VM.runCode function
  */
 exports.makeRunCodeData = function (exec, account, block) {
   return {
@@ -351,4 +392,16 @@ exports.setupPreConditions = function (state, testData, done) {
       }
     ], callback)
   }, done)
+}
+
+/**
+ * Returns an alias for specified hardforks to meet test dependencies requirements/assumptions.
+ * @param {String} forkConfig - the name of the hardfork for which an alias should be returned
+ * @returns {String} Either an alias of the forkConfig param, or the forkConfig param itself
+ */
+exports.getRequiredForkConfigAlias = function (forkConfig) {
+  if (String(forkConfig).match(/^petersburg$/i)) {
+    return 'ConstantinopleFix'
+  }
+  return forkConfig
 }
