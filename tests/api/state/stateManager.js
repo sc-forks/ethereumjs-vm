@@ -1,4 +1,4 @@
-const { promisify } = require('util')
+const promisify = require('util.promisify')
 const tape = require('tape')
 const util = require('ethereumjs-util')
 const StateManager = require('../../../lib/state/stateManager')
@@ -9,13 +9,12 @@ tape('StateManager', (t) => {
     const stateManager = new StateManager()
 
     st.deepEqual(stateManager._trie.root, util.KECCAK256_RLP, 'it has default root')
+    st.equal(stateManager._common.hardfork(), 'byzantium', 'it has default hardfork')
     stateManager.getStateRoot((err, res) => {
       st.error(err, 'getStateRoot returns no error')
       st.deepEqual(res, util.KECCAK256_RLP, 'it has default root')
+      st.end()
     })
-
-    st.equal(stateManager._common.hardfork(), 'byzantium', 'it has default hardfork')
-    st.end()
   })
 
   t.test('should clear the cache when the state root is set', async (st) => {
@@ -136,5 +135,29 @@ tape('StateManager', (t) => {
     st.equal(stateRoot.toString('hex'), genesisData.genesis_state_root)
 
     st.end()
+  })
+
+  t.test('should dump storage', async st => {
+    const stateManager = new StateManager()
+    const addressBuffer = Buffer.from('a94f5374fce5edbc8e2a8697c15331677e6ebf0b', 'hex')
+    const account = createAccount()
+
+    const putContractStorage = promisify((...args) => stateManager.putContractStorage(...args))
+
+    await promisify(stateManager.putAccount.bind(stateManager))(
+      'a94f5374fce5edbc8e2a8697c15331677e6ebf0b',
+      account
+    )
+
+    const key = Buffer.from('0x1234')
+    const value = Buffer.from('0x1234')
+    await putContractStorage(addressBuffer, key, value)
+
+    stateManager.dumpStorage(addressBuffer, (data) => {
+      const expect = { '1ac7d1b81b7ba1025b36ccb86723da6ee5a87259f1c2fd5abe69d3200b512ec8': '86307831323334' }
+      st.deepEqual(data, expect, 'should dump storage value')
+
+      st.end()
+    })
   })
 })

@@ -1,6 +1,6 @@
 const tape = require('tape')
 const BN = require('bn.js')
-const Stack = require('../../../lib/vm/stack')
+const Stack = require('../../../lib/evm/stack')
 
 tape('Stack', t => {
   t.test('should be empty initially', st => {
@@ -100,6 +100,21 @@ tape('Stack', t => {
     s.push(new BN(7))
     s.dup(2)
     st.deepEqual(s.pop(), new BN(5))
+    st.end()
+  })
+
+  t.test('should validate value overflow', st => {
+    const s = new Stack()
+    const max = new BN(2).pow(new BN(256)).subn(1)
+    s.push(max)
+    st.deepEqual(s.pop(), max)
+    st.throws(() => s.push(max.addn(1)))
+
+    const maxBuf = max.toArrayLike(Buffer, 'be', 32)
+    s.push(maxBuf)
+    st.deepEqual(s.pop(), maxBuf)
+    st.throws(() => s.push(max.addn(1).toArrayLike(Buffer, 'be', 32)))
+
     st.end()
   })
 })
